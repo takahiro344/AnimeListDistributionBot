@@ -19,6 +19,7 @@ from repository.user_json_repository import UserJsonRepository
 from service.anime_service import AnimeService
 from service.line_service import LineService
 from service.user_service import UserService
+from util import split_by_chunck_size
 
 debugpy.listen(("0.0.0.0", 5678))
 print("Waiting for debugger attach...")
@@ -69,17 +70,22 @@ def handle_message(event: MessageEvent):
         if event.type == "message":
             line_service = LineService(api_client)
 
-            anime_list: list[AnimeDto] = \
+            anime_items: list[AnimeDto] = \
                 anime_service.fetch_current_season_anime()
-            for anime_chunk in _split_anime_dto_list(anime_list, 5):
+            reply_message_items: list[str] = []
+            # 5件ずつのアニメ情報を一つのメッセージにまとめる
+            for anime_chunk in split_by_chunck_size(anime_items, 5):
                 reply_message = ""
                 for anime in anime_chunk:
                     reply_message += f"{anime.title}\n"
                     if anime.official_site_url:
                         reply_message += f"{anime.official_site_url}\n"
                     reply_message += "\n"
+                reply_message_items.append(reply_message)
 
-                line_service.push_message(event.source.user_id, reply_message)
+            line_service.push_message(
+                event.source.user_id,
+                reply_message_items)
 
     return "OK"
 
@@ -101,8 +107,3 @@ def handle_follow(event: FollowEvent):
                 messages=[TextMessage(text="フォローありがとうございます！")]
             )
         )
-
-
-def _split_anime_dto_list(anime_dto_list: list[AnimeDto], chunk_size: int):
-    for i in range(0, len(anime_dto_list), chunk_size):
-        yield anime_dto_list[i:i + chunk_size]
