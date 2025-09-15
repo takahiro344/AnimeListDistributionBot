@@ -1,0 +1,38 @@
+{
+    "name": "anime-list-distribution-bot",
+    "dockerComposeFile": [
+        "../docker-compose.yml"
+    ],
+    "service": "app",
+    "workspaceFolder": "/workspaces/AnimeListDistributionBot",
+    "mounts": [
+        "source=${localWorkspaceFolder}/data,target=/app/data,type=bind"
+    ],
+    "overrideCommand": false,
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.debugpy",
+                "ms-python.vscode-pylance",
+                "ms-python.isort",
+                "ms-python.flake8"
+            ],
+            "settings": {
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.python",
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "explicit",
+                        "source.fixAll": "explicit"
+                    }
+                },
+                "python.sortImports.args": [
+                    "--profile",
+                    "black"
+                ]
+            }
+        }
+    },
+    "remoteUser": "root"
+}
