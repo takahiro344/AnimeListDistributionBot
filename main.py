@@ -14,8 +14,10 @@ from linebot.v3.messaging import (
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent
 
+from model.anime_dto import AnimeDto
 from repository.user_json_repository import UserJsonRepository
 from service.anime_service import AnimeService
+from service.line_service import LineService
 from service.user_service import UserService
 
 debugpy.listen(("0.0.0.0", 5678))
@@ -65,22 +67,19 @@ async def callback(request: Request):
 def handle_message(event: MessageEvent):
     with ApiClient(configuration) as api_client:
         if event.type == "message":
-            anime_list = anime_service.fetch_current_season_anime()
+            line_service = LineService(api_client)
 
-            reply_message = ""
-            for anime in anime_list:
-                reply_message += f"{anime.title}\n"
-                if anime.official_site_url:
-                    reply_message += f"{anime.official_site_url}\n"
-                reply_message += "\n"
+            anime_list: list[AnimeDto] = \
+                anime_service.fetch_current_season_anime()
+            for anime_chunk in _split_anime_dto_list(anime_list, 5):
+                reply_message = ""
+                for anime in anime_chunk:
+                    reply_message += f"{anime.title}\n"
+                    if anime.official_site_url:
+                        reply_message += f"{anime.official_site_url}\n"
+                    reply_message += "\n"
 
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message_with_http_info(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_message)]
-                )
-            )
+                line_service.push_message(event.source.user_id, reply_message)
 
     return "OK"
 
@@ -102,3 +101,8 @@ def handle_follow(event: FollowEvent):
                 messages=[TextMessage(text="フォローありがとうございます！")]
             )
         )
+
+
+def _split_anime_dto_list(anime_dto_list: list[AnimeDto], chunk_size: int):
+    for i in range(0, len(anime_dto_list), chunk_size):
+        yield anime_dto_list[i:i + chunk_size]

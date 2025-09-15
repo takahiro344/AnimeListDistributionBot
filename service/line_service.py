@@ -1,25 +1,24 @@
-from linebot.v3.messaging import (
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
-)
-from linebot.v3.webhooks import MessageEvent
+from linebot.v3.messaging import ApiClient, MessagingApi, PushMessageRequest
 
 
 class LineService:
-    def __init__(
-            self,
-            api_client: ApiClient,
-            event: MessageEvent):
-        self.api_client = api_client
-        self.event = event
+    def __init__(self, api_client: ApiClient):
+        self.line_bot_api = MessagingApi(api_client)
 
-    def push_message(self, reply_message: str):
-        line_bot_api = MessagingApi(self.api_client)
-        line_bot_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=self.event.reply_token,
-                messages=[TextMessage(text=reply_message)]
-            )
-        )
+    def push_message(self, user_id: str, anime_chunk: str):
+        reply_message_dict = {
+            "to": user_id,
+            "messages": [
+                {
+                    "type": "text",
+                    "text": anime_chunk
+                }
+            ]
+        }
+        try:
+            push_message_request = PushMessageRequest.from_dict(
+                reply_message_dict)
+            self.line_bot_api.push_message(
+                push_message_request=push_message_request)
+        except Exception as e:
+            print(f"Error occurred while pushing message: {e}")
