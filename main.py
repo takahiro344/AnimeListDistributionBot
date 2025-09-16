@@ -8,12 +8,14 @@ from linebot.v3.messaging import ApiClient, Configuration
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
+from debugger import enable_debugger_if
 from model.anime_dto import AnimeDto
 from service.anime_service import AnimeService
 from service.line_service import LineService
 from util import split_by_chunk_size
 
 load_dotenv()
+enable_debugger_if()
 
 app = FastAPI()
 
