@@ -1,6 +1,6 @@
 from linebot.v3.messaging import ApiClient, MessagingApi, PushMessageRequest
 
-from util import split_by_chunck_size
+from util import split_by_chunk_size
 
 
 class LineService:
@@ -8,7 +8,7 @@ class LineService:
         self.line_bot_api = MessagingApi(api_client)
 
     def push_message(self, user_id: str, reply_messages: list[str]):
-        for reply_message_chunk in split_by_chunck_size(reply_messages, 5):
+        for reply_message_chunk in split_by_chunk_size(reply_messages, 5):
             messages = []
             for reply_message in reply_message_chunk:
                 messages.append({

@@ -1,29 +1,17 @@
+import logging
 import os
 
-import debugpy
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import (
-    ApiClient,
-    Configuration,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage,
-)
+from linebot.v3.messaging import ApiClient, Configuration
 from linebot.v3.webhook import WebhookHandler
-from linebot.v3.webhooks import FollowEvent, MessageEvent, TextMessageContent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 from model.anime_dto import AnimeDto
-from repository.user_json_repository import UserJsonRepository
 from service.anime_service import AnimeService
 from service.line_service import LineService
-from service.user_service import UserService
-from util import split_by_chunck_size
-
-debugpy.listen(("0.0.0.0", 5678))
-print("Waiting for debugger attach...")
-debugpy.wait_for_client()
+from util import split_by_chunk_size
 
 load_dotenv()
 
@@ -32,19 +20,28 @@ app = FastAPI()
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 configuration = Configuration(access_token=os.getenv('LINE_ACCESS_TOKEN'))
 
-# 共通ユーザーサービス
-user_repository = UserJsonRepository(os.getenv("USER_STORAGE"))
-user_service = UserService(user_repository)
+logger = logging.getLogger(__name__)
 
-# 共通アニメサービス
-anime_service = AnimeService(
-    api_url=os.getenv("ANNICT_API_URL"),
-    access_token=os.getenv("ANNICT_ACCESS_TOKEN")
-)
+
+def lambda_handler(event, context):
+    """
+    AWS Lambda handler function to process LINE webhook events.
+    """
+    signature = event['headers']['x-line-signature']
+    body = event['body']
+    try:
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        return {'statusCode': 400}
+
+    return {'statusCode': 200}
 
 
 @app.post("/callback")
 async def callback(request: Request):
+    """
+    FastAPI endpoint to handle LINE webhook requests.
+    """
     # get X-Line-Signature header value
     signature = request.headers['X-Line-Signature']
 
@@ -56,7 +53,7 @@ async def callback(request: Request):
     try:
         handler.handle(body_text, signature)
     except InvalidSignatureError:
-        app.logger.info(
+        logger.info(
             "Invalid signature. Please check your channel "
             + "access token/channel secret.")
         return Response(status_code=400)
@@ -66,44 +63,31 @@ async def callback(request: Request):
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event: MessageEvent):
+    """
+    Common message handler for LINE text messages.
+    """
+    anime_service = AnimeService(
+        api_url=os.getenv("ANNICT_API_URL"),
+        access_token=os.getenv("ANNICT_ACCESS_TOKEN")
+    )
     with ApiClient(configuration) as api_client:
-        if event.type == "message":
-            line_service = LineService(api_client)
+        line_service = LineService(api_client)
 
-            anime_items: list[AnimeDto] = \
-                anime_service.fetch_current_season_anime()
-            reply_message_items: list[str] = []
-            # 5件ずつのアニメ情報を一つのメッセージにまとめる
-            for anime_chunk in split_by_chunck_size(anime_items, 5):
-                reply_message = ""
-                for anime in anime_chunk:
-                    reply_message += f"{anime.title}\n"
-                    if anime.official_site_url:
-                        reply_message += f"{anime.official_site_url}\n"
-                    reply_message += "\n"
-                reply_message_items.append(reply_message)
+        anime_items: list[AnimeDto] = \
+            anime_service.fetch_current_season_anime()
+        reply_message_items: list[str] = []
+        # 5件ずつのアニメ情報を一つのメッセージにまとめる
+        for anime_chunk in split_by_chunk_size(anime_items, 5):
+            reply_message = ""
+            for anime in anime_chunk:
+                reply_message += f"{anime.title}\n"
+                if anime.official_site_url:
+                    reply_message += f"{anime.official_site_url}\n"
+                reply_message += "\n"
+            reply_message_items.append(reply_message)
 
-            line_service.push_message(
-                event.source.user_id,
-                reply_message_items)
+        line_service.push_message(
+            event.source.user_id,
+            reply_message_items)
 
     return "OK"
-
-
-@handler.add(FollowEvent)
-def handle_follow(event: FollowEvent):
-    user_id = event.source.user_id
-    print(f"New follower: {user_id}")
-
-    # ユーザーを登録
-    user_service.add_user(user_id)
-
-    # LINE にメッセージ返信
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text="フォローありがとうございます！")]
-            )
-        )
