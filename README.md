@@ -4,6 +4,6 @@
 
 ## 技術スタック
 
-- 🐍 Python 3.11+
+- 🐍 Python 3.12
 - ⚡ FastAPI
 - 🐳 Docker + Devcontainer
